@@ -7,7 +7,19 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+
+    "feature:start":  "bash scripts/git-feature.sh start",
+    "feature:finish": "bash scripts/git-feature.sh finish",
+    "feature:list":   "bash scripts/git-feature.sh list",
+
+    "hotfix:start":   "bash scripts/git-hotfix.sh start",
+    "hotfix:finish":  "bash scripts/git-hotfix.sh finish",
+
+    "release":        "bash scripts/git-release.sh",
+    "sync":           "bash scripts/git-sync.sh",
+    "cleanup":        "bash scripts/git-cleanup.sh",
+    "qc":             "bash scripts/git-quick-commit.sh"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.1",
