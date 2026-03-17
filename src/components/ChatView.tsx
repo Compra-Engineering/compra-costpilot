@@ -9,6 +9,7 @@ import { ModelSelector } from './ModelSelector';
 import { ContextBar } from './ContextBar';
 import { CompressionBanner } from './CompressionBanner';
 import { CompressionDivider } from './CompressionDivider';
+import { CostForecastBar } from './CostForecastBar';
 import { Menu } from 'lucide-react';
 
 interface ChatViewProps {
@@ -39,6 +40,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [bannerDismissed, setBannerDismissed] = useState<Set<string>>(new Set());
+  const [promptTokens, setPromptTokens] = useState(0);
+
+  useEffect(() => {
+    setPromptTokens(0);
+  }, [conversation?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -161,6 +167,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
           selectedModel={conversation?.model || selectedModel}
           thinkingEnabled={thinkingEnabled}
           onSwitchModel={!conversation ? onSelectModel : undefined}
+          onPromptTokenChange={setPromptTokens}
+        />
+        <CostForecastBar
+          conversation={conversation}
+          promptTokens={promptTokens}
+          selectedModel={conversation?.model || selectedModel}
+          thinkingEnabled={thinkingEnabled}
+          onOpenCompressionPanel={onOpenCompressionPanel}
         />
       </div>
     </div>

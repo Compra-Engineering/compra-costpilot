@@ -13,9 +13,10 @@ interface MessageInputProps {
   selectedModel?: ModelId;
   thinkingEnabled?: boolean;
   onSwitchModel?: (model: ModelId) => void;
+  onPromptTokenChange?: (tokens: number) => void;
 }
 
-export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, selectedModel = 'claude-sonnet-4.6', thinkingEnabled = false, onSwitchModel }) => {
+export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, selectedModel = 'claude-sonnet-4.6', thinkingEnabled = false, onSwitchModel, onPromptTokenChange }) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isFocused, setIsFocused] = useState(false);
@@ -32,6 +33,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, se
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [input]);
+
+  const estimatedTokens = calculateTokenEstimate(input) + attachments.reduce((s, a) => s + calculateTokenEstimate(a.content), 0);
+
+  useEffect(() => {
+    if (!onPromptTokenChange) return;
+    const timer = setTimeout(() => onPromptTokenChange(estimatedTokens), 150);
+    return () => clearTimeout(timer);
+  }, [estimatedTokens, onPromptTokenChange]);
 
   const suggestion = useMemo(() => {
     if (suggestionDismissed) return null;
@@ -89,7 +98,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, se
   };
 
   const canSend = (input.trim() || attachments.length > 0) && !disabled;
-  const estimatedTokens = calculateTokenEstimate(input) + attachments.reduce((s, a) => s + calculateTokenEstimate(a.content), 0);
 
   return (
     <div className="max-w-[var(--input-max-width)] mx-auto w-full px-4 pb-4 pt-2">
