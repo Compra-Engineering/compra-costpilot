@@ -1,23 +1,27 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { ArrowUp, Plus, X, FileText, Calculator } from 'lucide-react';
 import type { FileAttachment, ModelId } from '../types';
 import { parseFile, formatFileSize } from '../utils/fileParser';
 import { calculateTokenEstimate } from '../utils/tokenCounter';
 import { CostEstimator } from './CostEstimator';
+import { ModelSuggestion } from './ModelSuggestion';
+import { suggestModel } from '../utils/modelSuggester';
 
 interface MessageInputProps {
   onSend: (message: string, attachments: FileAttachment[]) => void;
   disabled?: boolean;
   selectedModel?: ModelId;
   thinkingEnabled?: boolean;
+  onSwitchModel?: (model: ModelId) => void;
 }
 
-export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, selectedModel = 'claude-sonnet-4.6', thinkingEnabled = false }) => {
+export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, selectedModel = 'claude-sonnet-4.6', thinkingEnabled = false, onSwitchModel }) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showEstimator, setShowEstimator] = useState(false);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,12 +33,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, se
     }
   }, [input]);
 
+  const suggestion = useMemo(() => {
+    if (suggestionDismissed) return null;
+    return suggestModel(input, attachments, selectedModel);
+  }, [input, attachments, selectedModel, suggestionDismissed]);
+
   const handleSend = () => {
     if ((input.trim() || attachments.length > 0) && !disabled) {
       onSend(input, [...attachments]);
       setInput('');
       setAttachments([]);
       setShowEstimator(false);
+      setSuggestionDismissed(false);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     }
   };
@@ -97,6 +107,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, se
               : 'border-[var(--border-light)] bg-white hover:shadow-md hover:border-[var(--border-medium)]'
         }`}
       >
+        {/* Model suggestion */}
+        {suggestion && onSwitchModel && (
+          <ModelSuggestion
+            suggestedModel={suggestion.suggestedModel}
+            reason={suggestion.reason}
+            onAccept={() => {
+              onSwitchModel(suggestion.suggestedModel);
+              setSuggestionDismissed(true);
+            }}
+            onDismiss={() => setSuggestionDismissed(true)}
+          />
+        )}
+
         {/* Cost estimator */}
         {estimatedTokens > 0 && (
           <CostEstimator
