@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
-import { Bot, User, Copy, Check, DollarSign, Database, HardDrive, ChevronDown, Lightbulb, BarChart3 } from 'lucide-react';
+import { Bot, User, Copy, Check, DollarSign, Database, HardDrive, ChevronDown, Lightbulb, BarChart3, GitBranch, Eye, EyeOff, Archive } from 'lucide-react';
 import type { Message } from '../types';
 import type { ModelId } from '../types';
 import type { Artifact } from '../utils/artifactParser';
@@ -15,11 +15,15 @@ import { ModelComparison } from './ModelComparison';
 
 interface MessageBubbleProps {
   message: Message;
+  messageIndex?: number;
   onOpenArtifact?: (artifact: Artifact) => void;
   activeArtifactId?: string | null;
+  onFork?: (index: number) => void;
+  onToggleContext?: (msgId: string) => void;
+  isCompressed?: boolean;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onOpenArtifact, activeArtifactId }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, messageIndex, onOpenArtifact, activeArtifactId, onFork, onToggleContext, isCompressed }) => {
   const isUser = message.role === 'user';
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [thinkingOpen, setThinkingOpen] = React.useState(false);
@@ -105,7 +109,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onOpenArt
   const isActivelyThinking = hasThinking && message.isStreaming && !message.content;
 
   return (
-    <div className={`py-4 px-4 ${isUser ? 'bg-transparent' : 'bg-transparent'}`}>
+    <div className={`py-4 px-4 transition-opacity ${message.excludeFromContext ? 'opacity-45' : ''} ${isUser ? 'bg-transparent' : 'bg-transparent'}`}>
       <div className="flex gap-3 max-w-[var(--chat-max-width)] mx-auto">
         {/* Avatar */}
         <div className="shrink-0 pt-0.5">
@@ -184,6 +188,40 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onOpenArt
               <div className="typing-indicator mt-1"><span /><span /><span /></div>
             )}
           </div>
+
+          {/* Action row: Fork + Context toggle */}
+          {!message.isStreaming && (
+            <div className="flex items-center gap-3 mt-2">
+              {onFork && messageIndex !== undefined && (
+                <button
+                  onClick={() => onFork(messageIndex)}
+                  className="flex items-center gap-1 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+                >
+                  <GitBranch size={12} />
+                  Fork
+                </button>
+              )}
+              {onToggleContext && (
+                <button
+                  onClick={() => onToggleContext(message.id)}
+                  className={`flex items-center gap-1 text-[11px] transition-colors ${
+                    message.excludeFromContext
+                      ? 'text-amber-500 hover:text-amber-600'
+                      : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {message.excludeFromContext ? <EyeOff size={12} /> : <Eye size={12} />}
+                  {message.excludeFromContext ? 'Excluded' : 'In context'}
+                </button>
+              )}
+              {isCompressed && (
+                <span className="flex items-center gap-1 text-[10px] text-amber-500">
+                  <Archive size={10} />
+                  Compressed
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Cost metadata */}
           {!isUser && message.cost && message.usage && (
