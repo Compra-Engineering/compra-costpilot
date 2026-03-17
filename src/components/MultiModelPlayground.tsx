@@ -93,7 +93,6 @@ export const MultiModelPlayground: React.FC<MultiModelPlaygroundProps> = ({
 
   const startTimesRef = useRef<Record<string, number>>({});
   const [startTimesState, setStartTimesState] = useState<Record<string, number>>({});
-  const abortControllersRef = useRef<Record<string, AbortController>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState<Record<string, boolean>>({});
   const [justCompleted, setJustCompleted] = useState<Record<string, boolean>>({});
@@ -502,7 +501,7 @@ export const MultiModelPlayground: React.FC<MultiModelPlaygroundProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 h-full divide-x divide-[var(--border-light)]">
-              {MODEL_IDS.map((id, colIndex) => {
+              {MODEL_IDS.map((id) => {
                 const r = results[id];
                 const config = MODEL_CONFIGS[id];
                 const colors = MODEL_COLORS[id];

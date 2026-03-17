@@ -1,10 +1,14 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { Conversation, ModelId, FileAttachment } from '../types';
 import type { Artifact } from '../utils/artifactParser';
+import { shouldSuggestCompression } from '../utils/contextCompression';
 import { MessageBubble } from './MessageBubble';
 import { WelcomeScreen } from './WelcomeScreen';
 import { MessageInput } from './MessageInput';
 import { ModelSelector } from './ModelSelector';
+import { ContextBar } from './ContextBar';
+import { CompressionBanner } from './CompressionBanner';
+import { CompressionDivider } from './CompressionDivider';
 import { Menu } from 'lucide-react';
 
 interface ChatViewProps {
@@ -20,14 +24,21 @@ interface ChatViewProps {
   activeArtifactId?: string | null;
   thinkingEnabled: boolean;
   onToggleThinking: (enabled: boolean) => void;
+  onForkFromMessage?: (index: number) => void;
+  onToggleMessageContext?: (msgId: string) => void;
+  onOpenCompressionPanel?: () => void;
+  onUndoCompression?: () => void;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
   conversation, onSendMessage, selectedModel, onSelectModel,
   isTyping, isThinking, disabled, onToggleSidebar, onOpenArtifact, activeArtifactId,
-  thinkingEnabled, onToggleThinking
+  thinkingEnabled, onToggleThinking,
+  onForkFromMessage, onToggleMessageContext,
+  onOpenCompressionPanel, onUndoCompression,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [bannerDismissed, setBannerDismissed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -37,7 +48,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
     onSendMessage(prompt, []);
   };
 
+  const handleDismissBanner = () => {
+    if (conversation) {
+      setBannerDismissed(prev => new Set(prev).add(conversation.id));
+    }
+  };
+
   const hasMessages = conversation && conversation.messages.length > 0;
+
+  const showBanner = conversation
+    && !isTyping
+    && !bannerDismissed.has(conversation.id)
+    && shouldSuggestCompression(conversation);
+
+  const compressionIndex = conversation?.compression?.compressedUpToIndex ?? null;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
@@ -72,13 +96,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-[var(--chat-max-width)] mx-auto py-6">
-            {conversation.messages.map(msg => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                onOpenArtifact={onOpenArtifact}
-                activeArtifactId={activeArtifactId}
-              />
+            {conversation.messages.map((msg, idx) => (
+              <React.Fragment key={msg.id}>
+                {compressionIndex !== null && idx === compressionIndex && (
+                  <CompressionDivider
+                    compression={conversation.compression!}
+                    compressedMessageCount={compressionIndex}
+                    onUndo={() => onUndoCompression?.()}
+                  />
+                )}
+                <MessageBubble
+                  message={msg}
+                  messageIndex={idx}
+                  onOpenArtifact={onOpenArtifact}
+                  activeArtifactId={activeArtifactId}
+                  onFork={onForkFromMessage}
+                  onToggleContext={onToggleMessageContext}
+                  isCompressed={compressionIndex !== null && idx < compressionIndex}
+                />
+              </React.Fragment>
             ))}
             {isTyping && !conversation.messages.some(m => m.isStreaming && m.content) && (
               <div className="flex gap-3 px-4 py-4">
@@ -103,7 +139,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Input */}
       <div className="shrink-0 relative bg-white">
         <div className="absolute -top-8 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none" />
-        <MessageInput onSend={onSendMessage} disabled={disabled || isTyping} selectedModel={conversation?.model || selectedModel} thinkingEnabled={thinkingEnabled} />
+        {showBanner && (
+          <CompressionBanner
+            conversation={conversation!}
+            onCompress={() => onOpenCompressionPanel?.()}
+            onDismiss={handleDismissBanner}
+          />
+        )}
+        {hasMessages && (
+          <ContextBar
+            messages={conversation.messages}
+            model={conversation.model}
+            compression={conversation.compression}
+            onOpenCompressionPanel={onOpenCompressionPanel}
+            onUndoCompression={onUndoCompression}
+          />
+        )}
+        <MessageInput
+          onSend={onSendMessage}
+          disabled={disabled || isTyping}
+          selectedModel={conversation?.model || selectedModel}
+          thinkingEnabled={thinkingEnabled}
+          onSwitchModel={!conversation ? onSelectModel : undefined}
+        />
       </div>
     </div>
   );

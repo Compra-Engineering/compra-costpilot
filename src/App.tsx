@@ -3,10 +3,12 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { CostDashboard } from './components/CostDashboard';
 import { MultiModelPlayground } from './components/MultiModelPlayground';
+import { CompressionPanel } from './components/CompressionPanel';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ArtifactPanel } from './components/ArtifactPanel';
 import { useConversations } from './hooks/useConversations';
 import { useChat } from './hooks/useChat';
+import { useCompression } from './hooks/useCompression';
 import type { ModelId } from './types';
 import type { Artifact } from './utils/artifactParser';
 import { AlertCircle } from 'lucide-react';
@@ -24,6 +26,16 @@ export default function App() {
     thinkingEnabled,
     setThinkingEnabled
   } = useChat(conversationHook);
+
+  const {
+    isCompressing,
+    compressionProgress,
+    compressionError,
+    showCompressionPanel,
+    setShowCompressionPanel,
+    compressContext,
+    undoCompression,
+  } = useCompression(conversationHook, apiKey);
 
   const [selectedModel, setSelectedModel] = useState<ModelId>('claude-haiku-4.5');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -77,12 +89,41 @@ export default function App() {
     setIsSidebarOpen(false);
   };
 
+  const handleForkFromMessage = (messageIndex: number) => {
+    if (!activeConversation) return;
+    conversationHook.forkConversation(activeConversation.id, messageIndex);
+    setActiveArtifact(null);
+  };
+
+  const handleToggleMessageContext = (messageId: string) => {
+    if (!activeConversation) return;
+    conversationHook.toggleMessageContext(activeConversation.id, messageId);
+  };
+
   const handleOpenArtifact = (artifact: Artifact) => {
     setActiveArtifact(artifact);
   };
 
   const handleCloseArtifact = () => {
     setActiveArtifact(null);
+  };
+
+  const handleOpenCompressionPanel = () => {
+    if (!isTyping) {
+      setShowCompressionPanel(true);
+    }
+  };
+
+  const handleCompressContext = (model: ModelId, keepRecent: number) => {
+    if (activeConversation) {
+      compressContext(activeConversation, model, keepRecent);
+    }
+  };
+
+  const handleUndoCompression = () => {
+    if (activeConversation) {
+      undoCompression(activeConversation.id);
+    }
   };
 
   return (
@@ -141,6 +182,10 @@ export default function App() {
           activeArtifactId={activeArtifact?.id ?? null}
           thinkingEnabled={thinkingEnabled}
           onToggleThinking={setThinkingEnabled}
+          onForkFromMessage={handleForkFromMessage}
+          onToggleMessageContext={handleToggleMessageContext}
+          onOpenCompressionPanel={handleOpenCompressionPanel}
+          onUndoCompression={handleUndoCompression}
         />
       </main>
 
@@ -162,6 +207,18 @@ export default function App() {
         onClose={() => setIsPlaygroundOpen(false)}
         apiKey={apiKey}
       />
+
+      {activeConversation && (
+        <CompressionPanel
+          conversation={activeConversation}
+          isOpen={showCompressionPanel}
+          onClose={() => setShowCompressionPanel(false)}
+          onCompress={handleCompressContext}
+          isCompressing={isCompressing}
+          compressionProgress={compressionProgress}
+          compressionError={compressionError}
+        />
+      )}
     </div>
   );
 }

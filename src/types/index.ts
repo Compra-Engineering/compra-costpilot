@@ -8,6 +8,7 @@ export interface Message {
   attachments?: FileAttachment[];
   isStreaming?: boolean;
   thinking?: string;
+  excludeFromContext?: boolean;
 }
 
 export interface TokenUsage {
@@ -24,6 +25,16 @@ export interface CostBreakdown {
   model: string;
 }
 
+export interface ContextCompression {
+  summary: string;
+  compressedUpToIndex: number;
+  model: ModelId;
+  timestamp: number;
+  originalTokenEstimate: number;
+  summaryTokenEstimate: number;
+  cost: CostBreakdown;
+}
+
 export interface Conversation {
   id: string;
   title: string;
@@ -34,6 +45,7 @@ export interface Conversation {
   totalCost: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  compression?: ContextCompression;
 }
 
 export type ModelId = 'claude-haiku-4.5' | 'claude-sonnet-4.6' | 'claude-opus-4.6';

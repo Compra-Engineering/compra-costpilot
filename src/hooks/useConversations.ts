@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Conversation, Message, ModelId } from '../types';
+import type { Conversation, ContextCompression, Message, ModelId } from '../types';
 import { calculateMessageCost } from '../utils/tokenCounter';
 import { MODEL_CONFIGS } from '../types';
 
@@ -128,6 +128,97 @@ export const useConversations = () => {
     if (activeId === id) setActiveId(null);
   };
 
+  const forkConversation = (sourceConversationId: string, upToMessageIndex: number): string | null => {
+    const source = conversations.find(c => c.id === sourceConversationId);
+    if (!source) return null;
+
+    const copiedMessages = source.messages.slice(0, upToMessageIndex + 1).map(msg => ({
+      ...msg,
+      id: crypto.randomUUID(),
+    }));
+
+    let totalCost = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    copiedMessages.forEach(msg => {
+      if (msg.cost) totalCost += msg.cost.totalCost;
+      if (msg.usage) {
+        totalInputTokens += msg.usage.input_tokens || 0;
+        totalOutputTokens += msg.usage.output_tokens || 0;
+      }
+    });
+
+    const newId = crypto.randomUUID();
+    const forked: Conversation = {
+      id: newId,
+      title: `Fork: ${source.title}`,
+      messages: copiedMessages,
+      model: source.model,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      totalCost,
+      totalInputTokens,
+      totalOutputTokens,
+    };
+
+    // Carry compression forward if fork point is beyond compressedUpToIndex
+    if (source.compression && upToMessageIndex >= source.compression.compressedUpToIndex) {
+      forked.compression = { ...source.compression };
+    }
+
+    setConversations(prev => [forked, ...prev]);
+    setActiveId(newId);
+    return newId;
+  };
+
+  const setCompression = (conversationId: string, compression: ContextCompression) => {
+    setConversations(prev => prev.map(conv => {
+      if (conv.id !== conversationId) return conv;
+      return {
+        ...conv,
+        compression,
+        totalCost: conv.totalCost + compression.cost.totalCost,
+        updatedAt: Date.now(),
+      };
+    }));
+  };
+
+  const clearCompression = (conversationId: string) => {
+    setConversations(prev => prev.map(conv => {
+      if (conv.id !== conversationId || !conv.compression) return conv;
+      const compressionCost = conv.compression.cost.totalCost;
+      return {
+        ...conv,
+        compression: undefined,
+        totalCost: Math.max(0, conv.totalCost - compressionCost),
+        updatedAt: Date.now(),
+      };
+    }));
+  };
+
+  const toggleMessageContext = (conversationId: string, messageId: string) => {
+    setConversations(prev => prev.map(conv => {
+      if (conv.id !== conversationId) return conv;
+
+      const msgIndex = conv.messages.findIndex(m => m.id === messageId);
+      if (msgIndex === -1) return conv;
+
+      const newMessages = [...conv.messages];
+      const target = newMessages[msgIndex];
+      const newValue = !target.excludeFromContext;
+      newMessages[msgIndex] = { ...target, excludeFromContext: newValue };
+
+      // Pair enforcement: toggle the paired message too
+      if (target.role === 'user' && msgIndex + 1 < newMessages.length && newMessages[msgIndex + 1].role === 'assistant') {
+        newMessages[msgIndex + 1] = { ...newMessages[msgIndex + 1], excludeFromContext: newValue };
+      } else if (target.role === 'assistant' && msgIndex - 1 >= 0 && newMessages[msgIndex - 1].role === 'user') {
+        newMessages[msgIndex - 1] = { ...newMessages[msgIndex - 1], excludeFromContext: newValue };
+      }
+
+      return { ...conv, messages: newMessages, updatedAt: Date.now() };
+    }));
+  };
+
   const clearAllConversations = () => {
     setConversations([]);
     setActiveId(null);
@@ -144,5 +235,9 @@ export const useConversations = () => {
     updateMessage,
     deleteConversation,
     clearAllConversations,
+    forkConversation,
+    toggleMessageContext,
+    setCompression,
+    clearCompression,
   };
 };
