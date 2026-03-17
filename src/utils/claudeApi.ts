@@ -70,7 +70,8 @@ Only use artifacts for substantial, standalone content. Do not use artifacts for
       };
     }
 
-    const response = await fetch('http://localhost:3001/api/messages', {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const response = await fetch(`${apiBase}/api/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

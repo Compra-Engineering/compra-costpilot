@@ -23,7 +23,8 @@ export const useChat = (conversationHook: ReturnType<typeof useConversations>) =
 
   const validateApiKey = async (key: string): Promise<boolean> => {
     try {
-      const resp = await fetch('http://localhost:3001/api/validate-key', {
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const resp = await fetch(`${apiBase}/api/validate-key`, {
         method: 'POST',
         headers: {
           'x-api-key': key
