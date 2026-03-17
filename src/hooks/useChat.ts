@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import type { Message, FileAttachment, ModelId } from '../types';
+import type { Message, Conversation, FileAttachment, ModelId } from '../types';
 import { sendMessageToClaude } from '../utils/claudeApi';
+import { buildCompressedMessages } from '../utils/contextCompression';
 import { useConversations } from './useConversations';
 
 interface ConversationOverride {
@@ -82,9 +83,15 @@ export const useChat = (conversationHook: ReturnType<typeof useConversations>) =
     }
 
     try {
-      const messagesWithUser = [...conv.messages, userMessage];
+      const messagesForApi = (() => {
+        const fullConv = { ...conv, messages: [...conv.messages, userMessage] } as Conversation;
+        if (fullConv.compression) {
+          return buildCompressedMessages(fullConv);
+        }
+        return fullConv.messages;
+      })();
 
-      await sendMessageToClaude(messagesWithUser, conv.model, apiKey, {
+      await sendMessageToClaude(messagesForApi, conv.model, apiKey, {
         onThinking: (text) => {
           streamedThinking += text;
           conversationHook.updateMessage(conv.id, assistantMessageId, {

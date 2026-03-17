@@ -1,6 +1,97 @@
 import type { Message, ModelId, TokenUsage } from '../types';
 import { MODEL_CONFIGS } from '../types';
 
+export const summarizeContext = async (
+  messages: { role: string; content: string }[],
+  model: ModelId,
+  apiKey: string,
+  onProgress?: (partial: string) => void
+): Promise<{ summary: string; usage: TokenUsage }> => {
+  const modelConfig = MODEL_CONFIGS[model];
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+  const systemPrompt =
+    'You are a precise conversation summarizer. Produce a concise but comprehensive summary that preserves all key facts, decisions, preferences, code, data structures, and context needed to continue the conversation. Output only the summary — no meta-commentary.';
+
+  const response = await fetch(`${apiBase}/api/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      model: modelConfig.apiModelId,
+      max_tokens: 4096,
+      messages,
+      system: systemPrompt,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error || errorData.details || `Summarization request failed with status ${response.status}`
+    );
+  }
+
+  if (!response.body) {
+    throw new Error('No response body stream available');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  let buffer = '';
+  let accumulated = '';
+  let usage: TokenUsage = { input_tokens: 0, output_tokens: 0 };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.trim() === '' || !line.startsWith('data: ')) continue;
+      const dataStr = line.slice(6);
+      if (dataStr === '[DONE]') continue;
+
+      try {
+        const data = JSON.parse(dataStr);
+
+        switch (data.type) {
+          case 'message_start':
+            if (data.message?.usage) {
+              usage.input_tokens = data.message.usage.input_tokens || 0;
+            }
+            break;
+          case 'content_block_delta':
+            if (data.delta?.type === 'text_delta' && data.delta.text) {
+              accumulated += data.delta.text;
+              onProgress?.(accumulated);
+            }
+            break;
+          case 'message_delta':
+            if (data.usage) {
+              usage.output_tokens = data.usage.output_tokens || 0;
+            }
+            break;
+        }
+      } catch (e) {
+        console.error('Error parsing summarize SSE:', e, dataStr);
+      }
+    }
+  }
+
+  if (!accumulated.trim()) {
+    throw new Error('Summarization returned an empty response');
+  }
+
+  return { summary: accumulated, usage };
+};
+
 export interface StreamCallbacks {
   onChunk: (text: string) => void;
   onThinking?: (text: string) => void;
@@ -20,6 +111,7 @@ export const sendMessageToClaude = async (
     // Format messages for Claude API
     const formattedMessages = messages
       .filter(m => !m.isStreaming)
+      .filter(m => !m.excludeFromContext)
       .map(msg => {
         let content = msg.content;
 
